@@ -1,184 +1,98 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASCII Water Ripples</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-    <style>
-        /* body와 html의 기본 마진과 패딩을 제거하여 전체 화면을 사용하도록 합니다. */
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden; /* 캔버스가 화면을 꽉 채우므로 스크롤바를 숨깁니다. */
-            background-color: #000000; /* 배경색을 검은색으로 변경 */
-            cursor: pointer;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2D Water Ripples</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.1/p5.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden; /* 스크롤바 방지 */
+    }
+    canvas {
+      display: block;
+    }
+  </style>
 </head>
 <body>
-    <script>
-        // 2D Water Ripples in ASCII
-        // 원본: The Coding Train / Daniel Shiffman
-        // 사용자의 요청에 따라 물결이 가장자리에서 반사되지 않고 사라지도록 수정합니다.
+  <script>
+    // 2D Water Ripples
+    // The Coding Train / Daniel Shiffman
+    // https://thecodingtrain.com/CodingChallenges/102-2d-water-ripple.html
+    // https://youtu.be/BZUdGqeOD0w
+    // https://editor.p5js.org/codingtrain/sketches/tYXtzNSl
 
-        let cols;
-        let rows;
-        let current; // 현재 프레임의 물결 상태
-        let previous; // 이전 프레임의 물결 상태
+    // Algorithm: https://web.archive.org/web/20160418004149/http://freespace.virgin.net/hugo.elias/graphics/x_water.htm
 
-        let dampening = 0.99; // 물결이 점점 약해지는 정도
-        
-        // 시뮬레이션 및 렌더링 해상도. 값을 크게 할수록 성능이 향상되지만, 물결의 디테일은 감소합니다.
-        let scl = 8; 
+    let cols;
+    let rows;
+    let current; // = new float[cols][rows];
+    let previous; // = new float[cols][rows];
 
-        // 물결의 강도를 표현할 ASCII 문자열 (공백부터 시작하여 밀도가 높은 문자로)
-        const density = ' .-*#@';
+    let dampening = 0.99;
 
-        // 중앙 텍스트를 미리 그려둘 그래픽 버퍼
-        let textBuffer;
-        // 텍스트 위치를 저장할 2D 배열 (최적화용)
-        let textMap;
+    const density = 'Ñ@#W$9876543210?!abc;:+=-,._ ';
+    let scl = 8; // 아스키 아트 렌더링 해상도
+    let physicsScl = 8; // 물리 시뮬레이션 해상도 (값이 클수록 빠름)
 
-        // 최적화: 텍스트 버퍼를 기반으로 텍스트 위치 맵을 생성하는 함수
-        function createTextMap() {
-            // 텍스트 버퍼의 픽셀 데이터를 로드합니다.
-            textBuffer.loadPixels();
-            textMap = new Array(cols).fill(false).map(() => new Array(rows).fill(false));
+    function setup() {
+      pixelDensity(1);
+      createCanvas(windowWidth, windowHeight);
+      // 시뮬레이션 해상도에 맞춰 배열 크기 설정
+      cols = floor(width / physicsScl);
+      rows = floor(height / physicsScl);
+      current = new Array(cols).fill(0).map(n => new Array(rows).fill(0));
+      previous = new Array(cols).fill(0).map(n => new Array(rows).fill(0));
+      textFont('monospace');
+      textSize(scl);
+    }
 
-            for (let i = 0; i < cols; i++) {
-                for (let j = 0; j < rows; j++) {
-                    const x = i * scl;
-                    const y = j * scl;
-                    // 텍스트 버퍼의 픽셀 배열에서 알파 값을 직접 확인합니다. (get()보다 훨씬 빠름)
-                    const alpha = textBuffer.pixels[(x + y * textBuffer.width) * 4 + 3];
-                    if (alpha > 0) {
-                        textMap[i][j] = true;
-                    }
-                }
-            }
+    function mouseDragged() {
+      // 마우스 좌표를 시뮬레이션 격자 좌표로 변환
+      let mx = floor(mouseX / physicsScl);
+      let my = floor(mouseY / physicsScl);
+      if (mx >= 1 && mx < cols - 1 && my >= 1 && my < rows - 1) {
+        previous[mx][my] = 2500;
+      }
+    }
+
+    function draw() {
+      background(0);
+
+      // 저해상도 격자에서 물리 계산을 수행하여 성능 향상
+      for (let i = 1; i < cols - 1; i++) {
+        for (let j = 1; j < rows - 1; j++) {
+          current[i][j] =
+            (previous[i - 1][j] +
+              previous[i + 1][j] +
+              previous[i][j - 1] +
+              previous[i][j + 1]) / 2 - current[i][j];
+          current[i][j] = current[i][j] * dampening;
         }
-        function setup() {
-            pixelDensity(1);
-            // 캔버스 크기를 브라우저 창 크기에 맞춥니다.
-            createCanvas(windowWidth, windowHeight);
-            
-            // 시뮬레이션 그리드 크기를 해상도(scl)에 맞춰 설정합니다.
-            cols = floor(width / scl);
-            rows = floor(height / scl);
-            
-            // 축소된 그리드 크기에 맞춰 2D 배열을 초기화합니다.
-            current = new Array(cols).fill(0).map(() => new Array(rows).fill(0));
-            previous = new Array(cols).fill(0).map(() => new Array(rows).fill(0));
+      }
 
-            textSize(scl); // 아스키 문자 크기를 해상도와 맞춥니다.
-            textFont('monospace'); // 고정폭 글꼴로 설정하여 문자들이 그리드에 잘 맞도록 합니다.
-            
-            // 중앙 텍스트를 위한 그래픽 버퍼 생성 및 설정
-            textBuffer = createGraphics(width, height);
-            textBuffer.fill(255); // 버퍼에 그릴 텍스트 색상 (흰색)
-            textBuffer.textFont('VT323');
-            textBuffer.textAlign(CENTER, CENTER);
-            textBuffer.textSize(200);
-            textBuffer.text('CODE', width / 2, height / 2);
-
-            createTextMap(); // 최적화: 텍스트 위치 맵을 미리 생성합니다.
+      // 아스키 렌더링
+      fill(255);
+      noStroke();
+      for (let j = 0; j < height; j += scl) {
+        for (let i = 0; i < width; i += scl) {
+          // 렌더링 좌표를 시뮬레이션 격자 좌표로 변환하여 값을 가져옴
+          let gridX = floor(i / physicsScl);
+          let gridY = floor(j / physicsScl);
+          let val = current[gridX][gridY];
+          // 파동의 세기(val)를 density 문자열의 인덱스로 변환
+          const len = density.length;
+          const charIndex = floor(map(constrain(val, 0, 255), 0, 255, len - 1, 0));
+          text(density.charAt(charIndex), i, j);
         }
-
-        // 주어진 위치에 물결을 생성하는 함수
-        function makeRippleAt(x, y) {
-            // 마우스 좌표를 그리드 좌표로 변환합니다.
-            let mx = floor(x / scl);
-            let my = floor(y / scl);
-            // 캔버스 경계 내에서만 값을 적용하여 오류를 방지합니다.
-            if (mx >= 1 && mx < cols - 1 && my >= 1 && my < rows - 1) {
-                previous[mx][my] = 25000;
-            }
-        }
-
-        // 마우스를 드래그할 때 물결을 만듭니다.
-        function mouseDragged() {
-            makeRippleAt(mouseX, mouseY);
-        }
-
-        // 마우스를 클릭할 때 물결을 만듭니다.
-        function mousePressed() {
-            makeRippleAt(mouseX, mouseY);
-        }
-
-        function draw() {
-            // 1. 물결 시뮬레이션 계산 (저해상도 그리드에서 실행)
-            // 가장자리(i=0, j=0, i=cols-1, j=rows-1)를 제외하고 계산하여 물결이 흡수되도록 합니다.
-            for (let i = 1; i < cols - 1; i++) {
-                for (let j = 1; j < rows - 1; j++) {
-                    current[i][j] =
-                        (previous[i - 1][j] +
-                        previous[i + 1][j] +
-                        previous[i][j - 1] +
-                        previous[i][j + 1]) / 2 - current[i][j];
-                    current[i][j] = current[i][j] * dampening;
-                }
-            }
-
-            // 2. 화면에 아스키 아트로 그리기
-            background(0);
-
-            let lastFillWasText = null; // 색상 변경 추적용
-
-            // 저해상도 그리드를 순회하며 아스키 물결을 그립니다.
-            for (let j = 0; j < rows; j++) {
-                for (let i = 0; i < cols; i++) {
-                    const x = i * scl;
-                    const y = j * scl;
-
-                    // 최적화: 미리 생성된 맵에서 텍스트 영역인지 빠르게 확인합니다.
-                    const isTextRegion = textMap[i][j];
-
-                    let intensity = current[i][j];
-                    const len = density.length;
-                    const charIndex = floor(map(abs(constrain(intensity, -1000, 1000)), 0, 1000, 0, len));
-
-                    // 텍스트 영역이거나 물결이 있는 경우에만 문자를 그립니다.
-                    if (isTextRegion || charIndex > 0) { 
-                        if (lastFillWasText !== isTextRegion) {
-                            isTextRegion ? fill(255) : fill(255, 0, 0);
-                            lastFillWasText = isTextRegion;
-                        }
-                        const charToDraw = isTextRegion ? density.charAt(len - 1 - charIndex) : density.charAt(charIndex);
-                        text(charToDraw, x, y);
-                    }
-                }
-            }
-
-            // 3. 버퍼 교체
-            let temp = previous;
-            previous = current;
-            current = temp;
-        }
-
-        // 브라우저 창 크기가 변경될 때 캔버스 크기와 그리드를 다시 조절합니다.
-        function windowResized() {
-            resizeCanvas(windowWidth, windowHeight);
-            cols = floor(width / scl);
-            rows = floor(height / scl);
-            current = new Array(cols).fill(0).map(() => new Array(rows).fill(0));
-            previous = new Array(cols).fill(0).map(() => new Array(rows).fill(0));
-            // textSize도 함께 조절해줍니다.
-            textSize(scl);
-
-            // 그래픽 버퍼도 다시 생성하고 텍스트를 그립니다.
-            textBuffer.resizeCanvas(width, height);
-            textBuffer.fill(255);
-            textBuffer.textFont('VT323');
-            textBuffer.textAlign(CENTER, CENTER);
-            textBuffer.textSize(200);
-            textBuffer.text('CODE', width / 2, height / 2);
-
-            createTextMap(); // 창 크기가 변경되었으므로 맵을 다시 생성합니다.
-        }
-    </script>
+      }
+      
+      let temp = previous;
+      previous = current;
+      current = temp;
+    }
+  </script>
 </body>
 </html>
