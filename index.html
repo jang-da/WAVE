@@ -1,98 +1,111 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>2D Water Ripples</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.1/p5.js"></script>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden; /* 스크롤바 방지 */
-    }
-    canvas {
-      display: block;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCII 파동 애니메이션</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #BCD7DE; /* 배경색 유지 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        /* 텍스트 애니메이션을 표시할 pre 태그 스타일링 */
+        pre {
+            font-family: 'Courier New', Courier, monospace; /* 고정폭 글꼴 */
+            color: #573722; /* 코드 색상 변경*/
+            font-size: 20px;
+            line-height: 1; /* 줄 간격을 촘촘하게 설정 */
+            white-space: pre; /* 공백과 줄바꿈을 코드 그대로 표시 */
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-  <script>
-    // 2D Water Ripples
-    // The Coding Train / Daniel Shiffman
-    // https://thecodingtrain.com/CodingChallenges/102-2d-water-ripple.html
-    // https://youtu.be/BZUdGqeOD0w
-    // https://editor.p5js.org/codingtrain/sketches/tYXtzNSl
+    <!-- 애니메이션을 표시할 pre 요소 -->
+    <pre id="asciiWave"></pre>
 
-    // Algorithm: https://web.archive.org/web/20160418004149/http://freespace.virgin.net/hugo.elias/graphics/x_water.htm
+    <script>
+        const outputElement = document.getElementById('asciiWave');
 
-    let cols;
-    let rows;
-    let current; // = new float[cols][rows];
-    let previous; // = new float[cols][rows];
+        // 텍스트 그리드 크기 설정 (화면 크기에 따라 유동적으로 조절 가능)
+        const cols = 150;
+        const rows = 50;
 
-    let dampening = 0.99;
+        // 웨이브의 속성을 정의하는 배열 (기존 로직 재사용)
+        const waves = [];
+        const waveCount = 7.5; // 텍스트에서는 파동 수를 조금 줄이는 것이 가독성에 좋습니다.
 
-    const density = 'Ñ@#W$9876543210?!abc;:+=-,._ ';
-    let scl = 8; // 아스키 아트 렌더링 해상도
-    let physicsScl = 8; // 물리 시뮬레이션 해상도 (값이 클수록 빠름)
+        // 사용할 문자 배열: 요청하신 c, o, d, e와 다른 아스키 문자를 포함
+        const chars = ['c', 'o', 'd', 'e', '*', '+', '=', '.', '-'];
 
-    function setup() {
-      pixelDensity(1);
-      createCanvas(windowWidth, windowHeight);
-      // 시뮬레이션 해상도에 맞춰 배열 크기 설정
-      cols = floor(width / physicsScl);
-      rows = floor(height / physicsScl);
-      current = new Array(cols).fill(0).map(n => new Array(rows).fill(0));
-      previous = new Array(cols).fill(0).map(n => new Array(rows).fill(0));
-      textFont('monospace');
-      textSize(scl);
-    }
-
-    function mouseDragged() {
-      // 마우스 좌표를 시뮬레이션 격자 좌표로 변환
-      let mx = floor(mouseX / physicsScl);
-      let my = floor(mouseY / physicsScl);
-      if (mx >= 1 && mx < cols - 1 && my >= 1 && my < rows - 1) {
-        previous[mx][my] = 2500;
-      }
-    }
-
-    function draw() {
-      background(0);
-
-      // 저해상도 격자에서 물리 계산을 수행하여 성능 향상
-      for (let i = 1; i < cols - 1; i++) {
-        for (let j = 1; j < rows - 1; j++) {
-          current[i][j] =
-            (previous[i - 1][j] +
-              previous[i + 1][j] +
-              previous[i][j - 1] +
-              previous[i][j + 1]) / 2 - current[i][j];
-          current[i][j] = current[i][j] * dampening;
+        for (let i = 0; i < waveCount; i++) {
+            waves.push({
+                // 진폭을 텍스트 그리드의 행 높이에 맞게 조정합니다.
+                amplitude1: 8 + Math.random() * 6,
+                frequency1: 0.02 + Math.random() * 0.02,
+                phase1: Math.random() * Math.PI * 2,
+                speed1: 0.015 + Math.random() * 0.02,
+                
+                amplitude2: 2 + Math.random() * 4,
+                frequency2: 0.03 + Math.random() * 0.03,
+                phase2: Math.random() * Math.PI * 2,
+                speed2: 0.01 + Math.random() * 0.015,
+            });
         }
-      }
 
-      // 아스키 렌더링
-      fill(255);
-      noStroke();
-      for (let j = 0; j < height; j += scl) {
-        for (let i = 0; i < width; i += scl) {
-          // 렌더링 좌표를 시뮬레이션 격자 좌표로 변환하여 값을 가져옴
-          let gridX = floor(i / physicsScl);
-          let gridY = floor(j / physicsScl);
-          let val = current[gridX][gridY];
-          // 파동의 세기(val)를 density 문자열의 인덱스로 변환
-          const len = density.length;
-          const charIndex = floor(map(constrain(val, 0, 255), 0, 255, len - 1, 0));
-          text(density.charAt(charIndex), i, j);
+        let charIndexOffset = 1; // 문자가 계속 바뀌도록 만드는 변수
+
+        // 애니메이션 함수
+        function animate() {
+            // 2D 그리드를 생성하고 모두 공백(' ')으로 초기화합니다.
+            let grid = Array.from({ length: rows }, () => Array(cols).fill(' '));
+
+            // 각 파동을 그리드 위에 문자로 렌더링합니다.
+            waves.forEach(wave => {
+                for (let x = 0; x < cols; x++) {
+                    // 중앙으로 갈수록 진폭이 커지는 효과
+                    const scaling = Math.pow(Math.E, -Math.pow(x / (cols / 2) - 1, 2) * 5);
+                    
+                    // 두 개의 사인 함수를 중첩하여 y 좌표 계산
+                    const y1 = Math.sin(x * wave.frequency1 + wave.phase1) * wave.amplitude1;
+                    const y2 = Math.sin(x * wave.frequency2 + wave.phase2) * wave.amplitude2;
+                    const y = (y1 + y2) * scaling;
+                    
+                    // 계산된 y값을 그리드의 실제 행(row) 인덱스로 변환합니다.
+                    const gridY = Math.round(rows / 2 + y);
+
+                    // 문자가 그리드 범위 내에 있는지 확인합니다.
+                    if (gridY >= 0 && gridY < rows) {
+                        // x 좌표와 시간의 흐름에 따라 다른 문자를 선택합니다.
+                        const charIndex = (x + Math.floor(charIndexOffset)) % chars.length;
+                        grid[gridY][x] = chars[charIndex];
+                    }
+                }
+                // 다음 프레임을 위해 파동의 시작점을 조금씩 이동시킵니다.
+                wave.phase1 += wave.speed1;
+                wave.phase2 += wave.speed2;
+            });
+
+            charIndexOffset += 0.5; // 문자들이 대각선으로 흐르는 듯한 효과를 줍니다.
+
+            // 2D 배열인 그리드를 하나의 긴 문자열로 변환합니다. (각 행을 '\n'으로 연결)
+            const outputString = grid.map(row => row.join('')).join('\n');
+            
+            // pre 요소의 내용을 새로운 문자열로 업데이트합니다.
+            outputElement.textContent = outputString;
+
+            // 다음 애니메이션 프레임을 요청합니다.
+            requestAnimationFrame(animate);
         }
-      }
-      
-      let temp = previous;
-      previous = current;
-      current = temp;
-    }
-  </script>
+
+        // 애니메이션 시작
+        animate();
+    </script>
 </body>
 </html>
+
